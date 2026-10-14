@@ -29,20 +29,36 @@ function checkbox(text, checked = false) {
 function setup(
   inputs,
   pathname = "/personal/assets-for-sale/vehicles/results-page",
+  storage = undefined,
 ) {
   let mutation,
     disconnected = false;
   const timers = [];
+  const applyButton = {
+    textContent: "Apply Filters",
+    disabled: false,
+    clicks: 0,
+    getAttribute() {
+      return null;
+    },
+    getClientRects() {
+      return [{}];
+    },
+    click() {
+      this.clicks++;
+    },
+  };
   const document = {
     documentElement: {},
-    querySelectorAll() {
-      return inputs;
+    querySelectorAll(selector) {
+      return selector === 'input[type="checkbox"]' ? inputs : [applyButton];
     },
     addEventListener() {},
     removeEventListener() {},
   };
   const context = vm.createContext({
     document,
+    sessionStorage: storage,
     location: { protocol: "https:", hostname: "www.bdo.com.ph", pathname },
     MutationObserver: class {
       constructor(fn) {
@@ -62,6 +78,7 @@ function setup(
   vm.runInContext(source, context);
   return {
     context,
+    applyButton,
     mutation: () => mutation(),
     runLatest: () => timers[timers.length - 1](),
     stopped: () => disconnected,
@@ -116,4 +133,37 @@ test("supports duplicated desktop/mobile filter lists without toggling either of
   setup(inputs);
   assert.ok(inputs.every((input) => input.checked));
   assert.ok(inputs.every((input) => input.clicks === 1));
+});
+
+test("clicks Apply Filters once after both models are selected", () => {
+  const env = setup([checkbox("Hilux"), checkbox("Fortuner")]);
+  assert.equal(env.applyButton.clicks, 1);
+  env.context.bdoResultsPreset();
+  env.context.bdoResultsPreset();
+  assert.equal(env.applyButton.clicks, 1);
+});
+test("does not submit filters when either requested model is missing", () => {
+  const env = setup([checkbox("Hilux")]);
+  assert.equal(env.applyButton.clicks, 0);
+});
+
+test("prevents repeated submission after a same-URL page reload", () => {
+  const values = new Map();
+  const storage = {
+    getItem: (key) => values.get(key),
+    setItem: (key, value) => values.set(key, value),
+  };
+  const first = setup(
+    [checkbox("Hilux"), checkbox("Fortuner")],
+    undefined,
+    storage,
+  );
+  const second = setup(
+    [checkbox("Hilux"), checkbox("Fortuner")],
+    undefined,
+    storage,
+  );
+  assert.equal(first.applyButton.clicks, 1);
+  assert.equal(second.applyButton.clicks, 0);
+  assert.equal(second.stopped(), true);
 });

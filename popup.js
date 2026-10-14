@@ -234,9 +234,10 @@ document.querySelector("#models").addEventListener("click", async () => {
       target: { tabId: tab.id },
       func: () => globalThis.bdoResultsPreset(),
     });
-    message.textContent = result.result.missing.length
-      ? "Waiting for model filters to load. Try again in a moment."
-      : "Hilux and Fortuner selected.";
+    message.textContent =
+      result.result.missing.length || !result.result.applied
+        ? "Waiting for model filters to load. Try again in a moment."
+        : "Hilux and Fortuner selected; Apply Filters clicked.";
   } catch (error) {
     message.textContent = error.message;
   } finally {

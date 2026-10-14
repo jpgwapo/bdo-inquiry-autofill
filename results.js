@@ -26,6 +26,41 @@
       normalize(input.parentElement?.textContent) === target
     );
   }
+  function applyFilters() {
+    if (globalThis.bdoResultsFiltersApplied) return true;
+    const button = Array.from(
+      document.querySelectorAll(
+        'button, input[type="submit"], input[type="button"], [role="button"]',
+      ),
+    ).find(
+      (el) =>
+        /^apply filters?$/.test(
+          normalize(
+            el.textContent || el.value || el.getAttribute("aria-label"),
+          ),
+        ) &&
+        !el.disabled &&
+        el.getAttribute("aria-disabled") !== "true" &&
+        el.getClientRects().length,
+    );
+    if (!button) return false;
+    // Guard against a full-page form reload repeatedly submitting the same URL.
+    const guardKey =
+      "bdo-model-preset-applied:" + location.pathname + (location.search || "");
+    try {
+      const last = Number(sessionStorage.getItem(guardKey) || 0);
+      if (last && Date.now() - last < 15000) {
+        globalThis.bdoResultsFiltersApplied = true;
+        return true;
+      }
+      sessionStorage.setItem(guardKey, String(Date.now()));
+    } catch {
+      /* Storage may be restricted; the per-document guard still applies. */
+    }
+    globalThis.bdoResultsFiltersApplied = true;
+    button.click();
+    return true;
+  }
   function apply() {
     const selected = [],
       missing = [];
@@ -42,7 +77,8 @@
       if (inputs.some((input) => input.checked)) selected.push(model);
       else missing.push(model);
     }
-    return { selected, missing };
+    const applied = !missing.length && applyFilters();
+    return { selected, missing, applied };
   }
   globalThis.bdoResultsPreset = apply;
   if (globalThis.bdoResultsPresetStarted) return;
@@ -60,7 +96,7 @@
   };
   const attempt = () => {
     const result = apply();
-    if (!result.missing.length) stop();
+    if (!result.missing.length && result.applied) stop();
   };
   document.addEventListener("change", manualChange, true);
   observer = new MutationObserver(() => {
@@ -68,6 +104,8 @@
     timer = setTimeout(attempt, 100);
   });
   observer.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ["disabled", "aria-disabled"],
     childList: true,
     subtree: true,
   });

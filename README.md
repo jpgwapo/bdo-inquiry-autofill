@@ -18,12 +18,12 @@ The live form fields could not be retrieved during development. Standard inputs,
 
 ## Saved model filters
 
-On `https://www.bdo.com.ph/personal/assets-for-sale/vehicles/results-page`, the extension automatically checks **Hilux** and **Fortuner** once per visit, including when the filters load late. It preserves other filters and lets you change selections afterward. The popup also has **Apply Hilux + Fortuner now**. Reload the extension and refresh any already-open results tab after updating. Automatic access is limited to this results-page path.
+On `https://www.bdo.com.ph/personal/assets-for-sale/vehicles/results-page`, the extension automatically checks **Hilux** and **Fortuner**, then clicks **Apply Filters** once per visit, including when the filters load late. It preserves other filters and lets you change selections afterward. The popup also has **Apply Hilux + Fortuner now**. Reload the extension and refresh any already-open results tab after updating. Automatic access is limited to this results-page path.
 
 ## Test
 
 ```sh
-node --test tests/form.test.cjs
+node --test tests/*.test.cjs
 ```
 
 The extension is independent of the e-commerce repository and has not been published to an extension store or GitHub. This is a personal convenience tool, not an official BDO extension.
