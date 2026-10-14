@@ -206,3 +206,40 @@ document.querySelector("#clear").addEventListener("click", () =>
   }),
 );
 initialize().catch((error) => status(error.message, true));
+
+// Results-page preset is separate from inquiry data and permissions.
+document.querySelector("#models").addEventListener("click", async () => {
+  const button = document.querySelector("#models"),
+    message = document.querySelector("#models-status");
+  button.disabled = true;
+  try {
+    const [tab] = await chrome.tabs.query({
+      active: true,
+      currentWindow: true,
+    });
+    const url = new URL(tab.url);
+    if (
+      url.protocol !== "https:" ||
+      !/(^|\.)bdo\.com\.ph$/.test(url.hostname) ||
+      !/^\/personal\/assets-for-sale\/vehicles\/results-page(?:\.html)?\/?$/.test(
+        url.pathname,
+      )
+    )
+      throw new Error("Open the BDO vehicle results page first.");
+    await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      files: ["results.js"],
+    });
+    const [result] = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: () => globalThis.bdoResultsPreset(),
+    });
+    message.textContent = result.result.missing.length
+      ? "Waiting for model filters to load. Try again in a moment."
+      : "Hilux and Fortuner selected.";
+  } catch (error) {
+    message.textContent = error.message;
+  } finally {
+    button.disabled = false;
+  }
+});

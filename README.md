@@ -16,6 +16,10 @@ Clicking **Fill matched fields** also selects **Buy Now**, **Preferred Sales Off
 
 The live form fields could not be retrieved during development. Standard inputs, textareas, dropdowns, and same-origin embedded forms are supported and covered by fixture tests. A cross-origin embedded form or custom closed-shadow controls may need an update based on the actual page; no broad banking-site permissions are requested.
 
+## Saved model filters
+
+On `https://www.bdo.com.ph/personal/assets-for-sale/vehicles/results-page`, the extension automatically checks **Hilux** and **Fortuner** once per visit, including when the filters load late. It preserves other filters and lets you change selections afterward. The popup also has **Apply Hilux + Fortuner now**. Reload the extension and refresh any already-open results tab after updating. Automatic access is limited to this results-page path.
+
 ## Test
 
 ```sh
