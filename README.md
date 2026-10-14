@@ -26,4 +26,4 @@ On `https://www.bdo.com.ph/personal/assets-for-sale/vehicles/results-page`, the 
 node --test tests/*.test.cjs
 ```
 
-The extension is independent of the e-commerce repository and has not been published to an extension store or GitHub. This is a personal convenience tool, not an official BDO extension.
+Source: https://github.com/jpgwapo/bdo-inquiry-autofill. The extension is independent of the e-commerce repository and has not been published to an extension store. This is a personal convenience tool, not an official BDO extension.
