@@ -183,9 +183,10 @@ fillButton.addEventListener("click", () =>
       mapping,
       document.querySelector("#overwrite").checked,
     );
+    const choices = await inPage(tab, "defaults");
     status(
-      `${result.filled.length} field(s) filled. ${result.kept.length} existing value(s) kept. ${result.skipped.length} blank or unmatched value(s) skipped.${result.missing.length ? " Some fields changed; inspect again." : ""} Review and submit the BDO form yourself.`,
-      !result.filled.length,
+      `${choices.selected.length}/4 preset choices selected.${choices.unavailable.length ? " Could not select: " + choices.unavailable.join("; ") + "." : ""} ${result.filled.length} field(s) filled. ${result.kept.length} existing value(s) kept. ${result.skipped.length} blank or unmatched value(s) skipped.${result.missing.length ? " Some fields changed; inspect again." : ""} Review and submit the BDO form yourself.`,
+      !result.filled.length && !choices.selected.length,
     );
   }),
 );

@@ -145,6 +145,148 @@
     el.dispatchEvent(new win.Event("change", { bubbles: true }));
     return true;
   }
+
+  const DEFAULTS = [
+    { label: "Request Type", value: "Buy Now", kind: "radio" },
+    { label: "Preferred Sales Officer", value: "None", kind: "choice" },
+    { label: "Source/Channel", value: "BDO Website", kind: "choice" },
+    {
+      label: "Would you like to finance your purchase with a BDO Loan?",
+      value: "No",
+      kind: "radio",
+    },
+  ];
+  function groupFor(doc, label) {
+    const title = Array.from(
+      doc.querySelectorAll("label, legend, span, p, h2, h3, div"),
+    )
+      .filter(
+        (el) =>
+          normalize(el.textContent) === normalize(label) &&
+          el.getClientRects().length,
+      )
+      .sort(
+        (a, b) =>
+          a.querySelectorAll("*").length - b.querySelectorAll("*").length,
+      )[0];
+    if (!title) return null;
+    for (
+      let group = title.parentElement, depth = 0;
+      group && depth < 6;
+      group = group.parentElement, depth++
+    ) {
+      if (group.matches("form,body,html")) break;
+      if (
+        group.querySelector(
+          'input, select, [role="combobox"], [role="radio"], button[aria-haspopup="listbox"]',
+        )
+      )
+        return group;
+    }
+    return null;
+  }
+  function optionText(el) {
+    return normalize(labelFor(el) || el.textContent || el.value);
+  }
+  async function chooseDefault(doc, setting) {
+    const group = groupFor(doc, setting.label);
+    if (!group) return false;
+    const targetText = normalize(setting.value);
+    if (setting.kind === "radio") {
+      const radio = Array.from(
+        group.querySelectorAll('input[type="radio"], [role="radio"]'),
+      ).find(
+        (el) =>
+          optionText(el) === targetText ||
+          normalize(el.value) === targetText ||
+          normalize(el.closest("label")?.textContent) === targetText,
+      );
+      if (
+        !radio ||
+        radio.disabled ||
+        radio.getAttribute("aria-disabled") === "true"
+      )
+        return false;
+      if (radio.checked || radio.getAttribute("aria-checked") === "true")
+        return true;
+      // click() lets the site's own event handlers update radio-group state.
+      const label = Array.from(radio.labels || [])[0] || radio.closest("label");
+      (label || radio).click();
+      return radio.type === "radio"
+        ? radio.checked
+        : radio.getAttribute("aria-checked") === "true";
+    }
+    const select = group.querySelector("select");
+    if (select && !select.disabled) return setValue(select, setting.value);
+    const control = group.querySelector(
+      '[role="combobox"], input:not([type="hidden"]), button[aria-haspopup="listbox"]',
+    );
+    if (
+      !control ||
+      control.disabled ||
+      control.getAttribute("aria-disabled") === "true"
+    )
+      return false;
+    if (normalize(control.value || control.textContent) === targetText)
+      return true;
+    const findOption = () => {
+      const listId =
+        control.getAttribute("aria-controls") ||
+        control.getAttribute("aria-owns");
+      const scope = listId ? doc.getElementById(listId) || doc : doc;
+      return Array.from(
+        scope.querySelectorAll(
+          '[role="option"], .slds-listbox__option, .vs__dropdown-option, .select2-results__option, .dropdown-item, li',
+        ),
+      ).find(
+        (el) =>
+          normalize(el.textContent) === targetText &&
+          el.getClientRects().length &&
+          el.getAttribute("aria-disabled") !== "true",
+      );
+    };
+    control.click();
+    // Custom lookup options often load after the menu opens. Never type an
+    // uncommitted display value into a lookup or choose a partial text match.
+    for (let attempt = 0; attempt < 15; attempt++) {
+      const option = findOption();
+      if (option) {
+        option.click();
+        return true;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    control.dispatchEvent(
+      new doc.defaultView.KeyboardEvent("keydown", {
+        key: "Escape",
+        bubbles: true,
+      }),
+    );
+    return false;
+  }
+  async function applyDefaults(doc) {
+    const results = { selected: [], unavailable: [] };
+    for (const setting of DEFAULTS) {
+      let selected = await chooseDefault(doc, setting);
+      if (!selected) {
+        for (const iframe of doc.querySelectorAll("iframe")) {
+          try {
+            if (
+              iframe.contentDocument &&
+              (await chooseDefault(iframe.contentDocument, setting))
+            ) {
+              selected = true;
+              break;
+            }
+          } catch {}
+        }
+      }
+      (selected ? results.selected : results.unavailable).push(
+        `${setting.label}: ${setting.value}`,
+      );
+    }
+    return results;
+  }
   globalThis.bdoInquiryForm = function (
     mode,
     profile = {},
@@ -160,6 +302,7 @@
     ) {
       throw new Error("Open the BDO vehicles-for-sale inquiry form first.");
     }
+    if (mode === "defaults") return applyDefaults(document);
     const fields = collect(document);
     // Ambiguous duplicate fields are excluded rather than filled by position.
     const unique = fields.filter(
