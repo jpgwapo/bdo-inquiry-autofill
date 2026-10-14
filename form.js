@@ -1,4 +1,4 @@
-// Injected only after an explicit popup action. Never submits or changes consent.
+// Injected only after an explicit popup action. Never submits the form.
 (() => {
   function normalize(value) {
     return String(value || "")
@@ -156,30 +156,63 @@
       kind: "radio",
     },
   ];
+
+  function queryDeep(root, selector) {
+    const found = Array.from(root.querySelectorAll(selector));
+    for (const el of root.querySelectorAll("*")) {
+      if (el.shadowRoot) found.push(...queryDeep(el.shadowRoot, selector));
+    }
+    return found;
+  }
+  function visible(el) {
+    const win = el.ownerDocument.defaultView;
+    return (
+      !!el.getClientRects().length &&
+      win.getComputedStyle(el).visibility !== "hidden"
+    );
+  }
+  function parentOf(el) {
+    return el.parentElement || el.getRootNode()?.host || null;
+  }
   function groupFor(doc, label) {
-    const title = Array.from(
-      doc.querySelectorAll("label, legend, span, p, h2, h3, div"),
-    )
+    const title = queryDeep(doc, "label, legend, span, p, h2, h3, div")
       .filter(
-        (el) =>
-          normalize(el.textContent) === normalize(label) &&
-          el.getClientRects().length,
+        (el) => normalize(el.textContent) === normalize(label) && visible(el),
       )
       .sort(
         (a, b) =>
           a.querySelectorAll("*").length - b.querySelectorAll("*").length,
       )[0];
-    if (!title) return null;
+    let anchor = title;
+    if (!anchor) {
+      const hint =
+        label === "Preferred Sales Officer"
+          ? /officer/
+          : label === "Source/Channel"
+            ? /source|channel/
+            : null;
+      if (hint)
+        anchor = queryDeep(doc, 'input, [role="combobox"], select').find(
+          (el) =>
+            hint.test(
+              normalize(
+                `${el.placeholder || ""} ${el.name || ""} ${el.id || ""} ${el.getAttribute("aria-label") || ""}`,
+              ),
+            ) && visible(el),
+        );
+    }
+    if (!anchor) return null;
     for (
-      let group = title.parentElement, depth = 0;
-      group && depth < 6;
-      group = group.parentElement, depth++
+      let group = parentOf(anchor), depth = 0;
+      group && depth < 8;
+      group = parentOf(group), depth++
     ) {
       if (group.matches("form,body,html")) break;
       if (
-        group.querySelector(
+        queryDeep(
+          group,
           'input, select, [role="combobox"], [role="radio"], button[aria-haspopup="listbox"]',
-        )
+        ).length
       )
         return group;
     }
@@ -193,8 +226,9 @@
     if (!group) return false;
     const targetText = normalize(setting.value);
     if (setting.kind === "radio") {
-      const radio = Array.from(
-        group.querySelectorAll('input[type="radio"], [role="radio"]'),
+      const radio = queryDeep(
+        group,
+        'input[type="radio"], [role="radio"]',
       ).find(
         (el) =>
           optionText(el) === targetText ||
@@ -209,60 +243,150 @@
         return false;
       if (radio.checked || radio.getAttribute("aria-checked") === "true")
         return true;
-      // click() lets the site's own event handlers update radio-group state.
       const label = Array.from(radio.labels || [])[0] || radio.closest("label");
       (label || radio).click();
+      await new Promise((resolve) => setTimeout(resolve, 50));
       return radio.type === "radio"
         ? radio.checked
         : radio.getAttribute("aria-checked") === "true";
     }
-    const select = group.querySelector("select");
-    if (select && !select.disabled) return setValue(select, setting.value);
-    const control = group.querySelector(
+    const select = queryDeep(group, "select")[0];
+    if (select && !select.disabled && setValue(select, setting.value))
+      return true;
+    const controls = queryDeep(
+      group,
       '[role="combobox"], input:not([type="hidden"]), button[aria-haspopup="listbox"]',
     );
-    if (
-      !control ||
-      control.disabled ||
-      control.getAttribute("aria-disabled") === "true"
-    )
-      return false;
-    if (normalize(control.value || control.textContent) === targetText)
-      return true;
+    const control = controls.find(
+      (el) =>
+        visible(el) &&
+        !el.disabled &&
+        el.getAttribute("aria-disabled") !== "true",
+    );
+    if (!control) return false;
+    const chosen = () =>
+      normalize(control.value || control.textContent) === targetText ||
+      queryDeep(
+        group,
+        '.vs__selected, .select2-selection__rendered, .slds-pill__label, [class*="single-value"], [class*="singleValue"]',
+      ).some((el) => normalize(el.textContent) === targetText && visible(el));
+    if (chosen()) return true;
     const findOption = () => {
       const listId =
         control.getAttribute("aria-controls") ||
         control.getAttribute("aria-owns");
       const scope = listId ? doc.getElementById(listId) || doc : doc;
-      return Array.from(
-        scope.querySelectorAll(
-          '[role="option"], .slds-listbox__option, .vs__dropdown-option, .select2-results__option, .dropdown-item, li',
-        ),
-      ).find(
-        (el) =>
-          normalize(el.textContent) === targetText &&
-          el.getClientRects().length &&
-          el.getAttribute("aria-disabled") !== "true",
-      );
+      // Some BDO lookup menus use plain div/span items without option roles.
+      return queryDeep(scope, '[role="option"], li, button, div, span, a')
+        .filter(
+          (el) =>
+            normalize(el.textContent) === targetText &&
+            visible(el) &&
+            el.getAttribute("aria-disabled") !== "true" &&
+            !el.matches("label,input,select"),
+        )
+        .sort(
+          (a, b) =>
+            a.querySelectorAll("*").length - b.querySelectorAll("*").length,
+        )[0];
     };
-    control.click();
-    // Custom lookup options often load after the menu opens. Never type an
-    // uncommitted display value into a lookup or choose a partial text match.
-    for (let attempt = 0; attempt < 15; attempt++) {
+    const win = doc.defaultView;
+    const open = (el) => {
+      el.dispatchEvent(new win.MouseEvent("mousedown", { bubbles: true }));
+      el.dispatchEvent(new win.MouseEvent("mouseup", { bubbles: true }));
+      el.click();
+    };
+    control.focus();
+    open(control);
+    for (let attempt = 0; attempt < 40; attempt++) {
+      // Click the actual option so the site's backing selection is committed.
       const option = findOption();
       if (option) {
-        option.click();
-        return true;
+        open(option);
+        for (let verify = 0; verify < 10; verify++) {
+          if (chosen() || option.getAttribute("aria-selected") === "true")
+            return true;
+          await new Promise((resolve) => setTimeout(resolve, 100));
+        }
+        return false;
+      }
+      // Lookup wrappers and chevrons sometimes own the menu event.
+      if (attempt === 10) {
+        const toggle = queryDeep(
+          group,
+          'button:not([type="submit"]), [aria-haspopup="listbox"], [class*="dropdown-toggle"], [class*="dropdown__toggle"], [class*="open-indicator"], [class*="chevron"]',
+        ).find((el) => visible(el) && !el.disabled && el !== control);
+        const wrapper = toggle || parentOf(control);
+        if (wrapper && wrapper !== group) open(wrapper);
       }
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
     control.dispatchEvent(
-      new doc.defaultView.KeyboardEvent("keydown", {
-        key: "Escape",
-        bubbles: true,
-      }),
+      new win.KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
     );
     return false;
+  }
+  async function acceptPrivacy(doc) {
+    const result = { scrolled: false, checked: false };
+    const phrase = /i have read.*understood.*agree.*data privacy.*consent/i;
+    const checkbox = queryDeep(
+      doc,
+      'input[type="checkbox"], [role="checkbox"]',
+    ).find((el) =>
+      phrase.test(labelFor(el) || el.closest("label")?.textContent || ""),
+    );
+    if (!checkbox) {
+      for (const frame of doc.querySelectorAll("iframe")) {
+        try {
+          if (frame.contentDocument) {
+            const nested = await acceptPrivacy(frame.contentDocument);
+            if (nested.checked) return nested;
+          }
+        } catch {}
+      }
+      return result;
+    }
+    const box = queryDeep(doc, "div, section, textarea")
+      .filter(
+        (el) =>
+          el.scrollHeight > el.clientHeight + 10 &&
+          el.clientHeight > 50 &&
+          /data privacy|privacy statement/i.test(
+            el.textContent || el.value || "",
+          ),
+      )
+      .sort((a, b) => a.clientHeight - b.clientHeight)[0];
+    if (box) {
+      box.scrollTop = box.scrollHeight;
+      box.dispatchEvent(new doc.defaultView.Event("scroll", { bubbles: true }));
+      result.scrolled = true;
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    }
+    checkbox.scrollIntoView({ block: "center", behavior: "instant" });
+    if (checkbox.checked || checkbox.getAttribute("aria-checked") === "true") {
+      result.checked = true;
+      return result;
+    }
+    for (let attempt = 0; attempt < 10; attempt++) {
+      if (
+        !checkbox.disabled &&
+        checkbox.getAttribute("aria-disabled") !== "true"
+      ) {
+        (
+          Array.from(checkbox.labels || [])[0] ||
+          checkbox.closest("label") ||
+          checkbox
+        ).click();
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        result.checked =
+          checkbox.type === "checkbox"
+            ? checkbox.checked
+            : checkbox.getAttribute("aria-checked") === "true";
+        return result;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    return result;
   }
   async function applyDefaults(doc) {
     const results = { selected: [], unavailable: [] };
@@ -303,6 +427,7 @@
       throw new Error("Open the BDO vehicles-for-sale inquiry form first.");
     }
     if (mode === "defaults") return applyDefaults(document);
+    if (mode === "privacy") return acceptPrivacy(document);
     const fields = collect(document);
     // Ambiguous duplicate fields are excluded rather than filled by position.
     const unique = fields.filter(
