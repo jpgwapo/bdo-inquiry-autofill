@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>BDO Inquiry Autofill</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header>
+      <div class="mark">B</div>
+      <div>
+        <h1>Inquiry Autofill</h1>
+        <p>For BDO vehicles for sale</p>
+      </div>
+      <span class="local">Local only</span>
+    </header>
+    <main>
+      <p class="intro">Your details, ready for the next vehicle.</p>
+      <form id="profile">
+        <div class="two">
+          <label
+            >First name<input
+              name="firstName"
+              autocomplete="given-name"
+              maxlength="100" /></label
+          ><label
+            >Last name<input
+              name="lastName"
+              autocomplete="family-name"
+              maxlength="100"
+          /></label>
+        </div>
+        <label
+          >Middle name <small>optional</small
+          ><input
+            name="middleName"
+            autocomplete="additional-name"
+            maxlength="100" /></label
+        ><label
+          >Email<input
+            name="email"
+            type="email"
+            autocomplete="email"
+            maxlength="254"
+        /></label>
+        <div class="two">
+          <label
+            >Mobile number<input
+              name="mobile"
+              type="tel"
+              autocomplete="tel"
+              placeholder="09xxxxxxxxx"
+              maxlength="30" /></label
+          ><label
+            >Telephone <small>optional</small
+            ><input name="telephone" type="tel" maxlength="30"
+          /></label>
+        </div>
+        <label
+          >Street address <small>optional</small
+          ><input name="address" autocomplete="street-address" maxlength="255"
+        /></label>
+        <div class="two">
+          <label
+            >City <small>optional</small
+            ><input
+              name="city"
+              autocomplete="address-level2"
+              maxlength="100" /></label
+          ><label
+            >Province <small>optional</small
+            ><input
+              name="province"
+              autocomplete="address-level1"
+              maxlength="100"
+          /></label>
+        </div>
+        <div class="two">
+          <label
+            >Postal code <small>optional</small
+            ><input
+              name="postalCode"
+              autocomplete="postal-code"
+              maxlength="20" /></label
+          ><label
+            >Country <small>optional</small
+            ><input
+              name="country"
+              autocomplete="country-name"
+              maxlength="100"
+              placeholder="Philippines"
+          /></label>
+        </div>
+        <label
+          >Inquiry message <small>optional</small
+          ><textarea
+            name="message"
+            rows="3"
+            maxlength="2000"
+            placeholder="I am interested in this vehicle. Please send availability, inspection details, and purchase requirements."
+          ></textarea></label
+        ><button class="secondary" type="submit">Save my details</button>
+      </form>
+      <section class="fill-section">
+        <div class="section-heading">
+          <h2>Fill this inquiry</h2>
+          <button id="inspect" class="text" type="button">
+            Inspect form ↻
+          </button>
+        </div>
+        <p class="hint">
+          Open a BDO vehicle inquiry tab, inspect the form, then confirm the
+          field matches below.
+        </p>
+        <div id="fields" class="fields"></div>
+        <label class="check"
+          ><input id="overwrite" type="checkbox" />Replace existing contact
+          details</label
+        ><button id="fill" class="primary" type="button" disabled>
+          Fill matched fields
+        </button>
+        <p id="status" role="status" aria-live="polite"></p>
+        <p class="hint">
+          Vehicle details stay as they are. Review the form and submit it
+          yourself.
+        </p>
+      </section>
+      <footer>
+        <span>Saved in this browser. No sync or uploads.</span
+        ><button id="clear" class="text" type="button">Clear saved data</button>
+      </footer>
+    </main>
+    <script src="popup.js"></script>
+  </body>
+</html>
